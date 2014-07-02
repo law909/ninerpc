@@ -6,36 +6,58 @@ var ninerpc = (function() {
         this.idCnt = 0;
         this.targetOrigin = targetOrigin;
         this.cblist = {};
+        this.requestlist = {};
         this.listen();
     }
     Channel.prototype.generateId = function() {
         return '' + this.nameSpace + this.idCnt++;
     };
-    Channel.prototype.buildMessage = function(method, params) {
-        return JSON.stringify({
+
+    Channel.prototype.buildRequest = function(method, params) {
+        return {
             jsonrpc: '2.0',
-            id: generateId(),
+            id: this.generateId(),
             method: method,
             params: params
-        });
+        };
     };
-    Channel.prototype.buildNotificationMessage = function(method, params) {
-        return JSON.stringify({
+    Channel.prototype.sendRequest = function(method, params, callback) {
+        var msg = this.buildRequest(method, params, callback);
+        this.requestlist[msg.id] = callback;
+        this.receiver.postMessage(JSON.stringify(msg), this.targetOrigin);
+    }
+
+    Channel.prototype.buildNotification = function(method, params) {
+        return {
             jsonrpc: '2.0',
             method: method,
             params: params
-        });
+        };
     };
     Channel.prototype.sendNotification = function(method, params) {
-        var msg = this.buildNotificationMessage(method, params);
-        this.receiver.postMessage(msg, this.targetOrigin);
+        var msg = this.buildNotification(method, params);
+        this.receiver.postMessage(JSON.stringify(msg), this.targetOrigin);
     };
+
+    Channel.prototype.buildResult = function(id, result) {
+        return {
+            jsonrpc: '2.0',
+            result: result,
+            id: id
+        }
+    };
+    Channel.prototype.sendResult = function(ev, id, result) {
+        var msg = this.buildResult(id, result);
+        ev.source.postMessage(JSON.stringify(msg), ev.origin);
+    };
+
     Channel.prototype.subscribe = function(method, callback) {
         this.cblist[method] = callback;
     };
     Channel.prototype.unsubscribe = function(method) {
         delete this.cblist[method];
     };
+
     Channel.prototype.listen = function() {
         var self = this;
 
@@ -44,9 +66,24 @@ var ninerpc = (function() {
             if (self.targetOrigin !== '*' && ev.origin !== self.targetOrigin) {
                 return;
             }
-            msg = JSON.parse(ev.data);
-            if (typeof self.cblist[msg.method] == 'function') {
-                self.cblist[msg.method].call(self, ev, msg.params);
+            try {
+                msg = JSON.parse(ev.data);
+            }
+            catch(e) {
+
+            }
+            if (msg) {
+                if (typeof msg['result'] != 'undefined') {
+                    if (typeof self.requestlist[msg.id] == 'function') {
+                        self.requestlist[msg.id].call(self, ev, msg);
+                        delete self.requestlist[msg.id];
+                    }
+                }
+                else {
+                    if (typeof self.cblist[msg.method] == 'function') {
+                        self.cblist[msg.method].call(self, ev, msg);
+                    }
+                }
             }
         }
 
