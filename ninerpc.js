@@ -75,13 +75,13 @@ var ninerpc = (function() {
             if (msg) {
                 if (typeof msg['result'] != 'undefined') {
                     if (typeof self.requestlist[msg.id] == 'function') {
-                        self.requestlist[msg.id].call(self, ev, msg);
+                        self.requestlist[msg.id].call(self, ev, msg, self);
                         delete self.requestlist[msg.id];
                     }
                 }
                 else {
                     if (typeof self.cblist[msg.method] == 'function') {
-                        self.cblist[msg.method].call(self, ev, msg);
+                        self.cblist[msg.method].call(self, ev, msg, self);
                     }
                 }
             }
